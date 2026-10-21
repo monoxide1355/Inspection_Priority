@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inspection Queue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: shop-floor work board. Queue (with NEXT UP tag) on the left, request form on the right; stacks on phones. */
+:root {
+  --bg: #eef0f2;
+  --surface: #ffffff;
+  --sunk: #e3e6ea;
+  --ink: #1b2129;
+  --muted: #5b6573;
+  --line: #cdd2d9;
+  --tag: #f2b705;          /* inspection-tag yellow: NEXT UP only */
+  --tag-ink: #241a00;
+  --wire: #b4561f;         /* copper */
+  --wire-soft: #f6e3d6;
+  --machine: #2f5f8a;      /* tool steel blue */
+  --machine-soft: #dce7f1;
+  --expedite: #c62828;
+  --expedite-soft: #fbe0e0;
+  --ok: #2e7d4f;
+  --ok-soft: #dcefe3;
+  --on-ok: #ffffff;
+  --hold: #8a6a00;
+  --hold-soft: #f5ecc8;
+  --focus: #2f5f8a;
+  --f-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14181d; --surface: #1c2128; --sunk: #252b33; --ink: #e6e9ed; --muted: #9aa4b1; --line: #343c46;
+    --tag: #f2b705; --tag-ink: #241a00;
+    --wire: #e08a55; --wire-soft: #3a2619; --machine: #7fb0dd; --machine-soft: #1d2f40;
+    --expedite: #ff6b6b; --expedite-soft: #3d1c1e; --ok: #6cc596; --ok-soft: #173426; --on-ok: #0d2117;
+    --hold: #e0c15a; --hold-soft: #362d10; --focus: #7fb0dd;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14181d; --surface: #1c2128; --sunk: #252b33; --ink: #e6e9ed; --muted: #9aa4b1; --line: #343c46;
+  --tag: #f2b705; --tag-ink: #241a00;
+  --wire: #e08a55; --wire-soft: #3a2619; --machine: #7fb0dd; --machine-soft: #1d2f40;
+  --expedite: #ff6b6b; --expedite-soft: #3d1c1e; --ok: #6cc596; --ok-soft: #173426; --on-ok: #0d2117;
+  --hold: #e0c15a; --hold-soft: #362d10; --focus: #7fb0dd;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+img { max-width: 100%; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; border-bottom: 3px solid var(--ink); padding-bottom: 10px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: 2.3rem; letter-spacing: .01em; line-height: 1; margin: 0; text-transform: uppercase; text-wrap: balance; }
+.sub { color: var(--muted); font-size: .9rem; margin-top: 4px; }
+.counts { display: flex; gap: 18px; font-variant-numeric: tabular-nums; }
+.count { display: flex; flex-direction: column; align-items: flex-end; }
+.count b { font-family: var(--f-display); font-size: 1.7rem; line-height: 1; font-weight: 600; }
+.count span { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.formcol { min-width: 0; }
+.col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+h2 { font-family: var(--f-display); font-weight: 600; font-size: 1.15rem; text-transform: uppercase; letter-spacing: .06em; margin: 0; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+h2 .n { font-variant-numeric: tabular-nums; color: var(--ink); }
+.banner { background: var(--hold-soft); color: var(--ink); border: 1px solid var(--hold); padding: 10px 12px; border-radius: 6px; font-size: .9rem; }
+.example-note { background: var(--sunk); border: 1px dashed var(--muted); padding: 8px 12px; border-radius: 6px; font-size: .88rem; display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* NEXT UP inspection tag */
+.next { position: relative; background: var(--tag); color: var(--tag-ink); border-radius: 4px 14px 14px 4px; padding: 18px 20px 18px 44px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 2px 0 rgba(0,0,0,.18); }
+.next::before { content: ""; position: absolute; left: 14px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 3px rgba(0,0,0,.25); }
+.next .eyebrow { font-family: var(--f-display); font-weight: 700; letter-spacing: .14em; font-size: .95rem; text-transform: uppercase; }
+.next .part { font-family: var(--f-display); font-weight: 700; font-size: 2.4rem; line-height: 1; overflow-wrap: anywhere; }
+.next .meta { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .95rem; }
+.next .meta b { font-weight: 600; }
+.next .note { font-size: .92rem; background: rgba(255,255,255,.35); padding: 6px 10px; border-radius: 4px; }
+.next .actions .btn { background: var(--tag-ink); color: var(--tag); border-color: var(--tag-ink); }
+.next .actions .btn.ghost { background: transparent; color: var(--tag-ink); border-color: var(--tag-ink); }
+.next.empty { background: var(--surface); color: var(--muted); border: 2px dashed var(--line); box-shadow: none; }
+.next.empty::before { display: none; }
+.next.empty { padding-left: 20px; }
+
+/* bench (in progress) */
+.bench { background: var(--surface); border: 2px solid var(--ok); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+
+/* queue rows */
+.list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); align-items: start; }
+.row:first-child { border-top: 0; }
+.row.exp { box-shadow: inset 4px 0 0 var(--expedite); }
+.rank { font-family: var(--f-display); font-weight: 600; font-size: 1.5rem; line-height: 1.1; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.line1 { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.pn { font-family: var(--f-mono); font-weight: 500; font-size: 1rem; overflow-wrap: anywhere; }
+.job { font-family: var(--f-mono); font-size: .85rem; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
+.chip.wire { background: var(--wire-soft); color: var(--wire); }
+.chip.machine { background: var(--machine-soft); color: var(--machine); }
+.chip.fp { background: var(--ink); color: var(--surface); }
+.chip.final { background: var(--sunk); color: var(--ink); }
+.chip.exp { background: var(--expedite); color: #fff; }
+.chip.over { background: var(--expedite-soft); color: var(--expedite); }
+.chip.today { background: var(--hold-soft); color: var(--hold); }
+.chip.hold { background: var(--hold-soft); color: var(--hold); }
+.small { font-size: .84rem; color: var(--muted); }
+.why { font-size: .84rem; color: var(--expedite); }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.inline { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--sunk); padding: 8px; border-radius: 6px; }
+.inline input { flex: 1 1 180px; min-width: 0; }
+@media (max-width: 600px) { .row { grid-template-columns: 28px minmax(0, 1fr); } .row .actions { grid-column: 2 / -1; justify-content: flex-start; } .next .part { font-size: 2rem; } }
+
+/* buttons + form */
+.btn { font: 600 .85rem var(--f-body); padding: 6px 12px; border-radius: 5px; border: 1px solid var(--ink); background: var(--ink); color: var(--surface); cursor: pointer; white-space: nowrap; }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn.ghost:hover { border-color: var(--ink); }
+.btn.danger { background: transparent; color: var(--expedite); border-color: var(--expedite); }
+.btn.go { background: var(--ok); border-color: var(--ok); color: var(--on-ok); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+form.card { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--ink); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 12px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+@media (max-width: 860px) { form.card { position: static; } }
+form h2 { color: var(--ink); }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label, .lbl { font-size: .74rem; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.field { min-width: 0; }
+input, select, textarea { font: 400 .95rem var(--f-body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; width: 100%; min-width: 0; }
+textarea { resize: vertical; min-height: 54px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.seg { position: relative; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; left: 0; top: 0; }
+.seg label { text-align: center; padding: 8px 6px; cursor: pointer; font-weight: 600; font-size: .9rem; background: var(--bg); color: var(--muted); }
+.seg label + input + label, .seg input + label + input + label { border-left: 1px solid var(--line); }
+.seg input:checked + label { background: var(--ink); color: var(--surface); }
+.seg input:disabled + label { opacity: .4; cursor: not-allowed; }
+.seg input:focus-visible + label { outline: 3px solid var(--focus); outline-offset: -3px; }
+.check { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+.check input { width: auto; accent-color: var(--expedite); }
+.hint { font-size: .8rem; color: var(--muted); }
+.err { color: var(--expedite); font-size: .85rem; min-height: 1em; }
+.rule { font-size: .82rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+.rule ol { margin: 4px 0 0; padding-left: 18px; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+details > summary { cursor: pointer; padding: 10px 14px; font-family: var(--f-display); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 8px 14px; border-radius: 6px; font-size: .9rem; z-index: 20; }
+@media (prefers-reduced-motion: no-preference) { .row, .next { transition: background-color .2s; } }
+
+.userbar { display: flex; gap: 10px; align-items: center; font-size: .85rem; color: var(--muted); flex-wrap: wrap; }
+.signin { max-width: 420px; margin: 40px auto; }
+.signin p { margin: 0; color: var(--muted); font-size: .92rem; }
+.config { max-width: 640px; margin: 40px auto; background: var(--surface); border: 1px solid var(--expedite); border-radius: 6px; padding: 16px; }
+.config code { font-family: var(--f-mono); background: var(--sunk); padding: 1px 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Inspection Queue</h1>
+      <div class="sub" id="today"></div>
+    </div>
+    <div class="userbar" id="userbar" hidden><span id="whoami"></span><button type="button" class="btn ghost" id="signOut">Sign out</button></div>
+    <div class="counts" aria-live="polite">
+      <div class="count"><b id="cQueued">0</b><span>Waiting</span></div>
+      <div class="count"><b id="cOver">0</b><span>Past due</span></div>
+      <div class="count"><b id="cDone">0</b><span>Done today</span></div>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+  <div class="config" id="configMsg" hidden>
+    <h2 style="color:var(--expedite)">Setup needed</h2>
+    <p>Open <code>index.html</code> in a text editor and fill in <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> near the top of the script. Both are in Supabase under Project Settings &rarr; API.</p>
+  </div>
+  <form class="card signin" id="signinForm" hidden novalidate>
+    <h2>Sign in</h2>
+    <p>Enter your work email. We'll send a link that signs you in on this device.</p>
+    <div class="field"><label for="sEmail">Work email</label><input id="sEmail" type="email" autocomplete="email"></div>
+    <div class="err" id="sErr" role="alert"></div>
+    <button class="btn" type="submit" id="sBtn">Send sign-in link</button>
+  </form>
+
+  <div class="grid" id="app" hidden>
+    <div class="col">
+            <section id="nextBox" aria-label="Next inspection"></section>
+      <section id="benchBox" class="col" hidden></section>
+      <section class="col">
+        <h2>Queue <span class="n" id="qCount"></span></h2>
+        <ol class="list" id="queue"></ol>
+      </section>
+      <details id="holdWrap" hidden>
+        <summary>On hold (<span id="hCount">0</span>)</summary>
+        <ol class="list" id="holdList"></ol>
+      </details>
+      <details id="doneWrap">
+        <summary>Completed (<span id="dCount">0</span>)</summary>
+        <ol class="list" id="doneList"></ol>
+      </details>
+    </div>
+
+    <div class="formcol">
+      <form class="card" id="addForm" novalidate>
+        <h2>Add inspection request</h2>
+        <div class="field">
+          <span class="lbl" id="deptLbl">Department</span>
+          <div class="seg" role="radiogroup" aria-labelledby="deptLbl">
+            <input type="radio" name="dept" id="dMachine" value="machine" checked><label for="dMachine">Machine Shop</label>
+            <input type="radio" name="dept" id="dWire" value="wire"><label for="dWire">Wire Fab</label>
+          </div>
+        </div>
+        <div class="field">
+          <span class="lbl" id="typeLbl">Inspection</span>
+          <div class="seg" role="radiogroup" aria-labelledby="typeLbl">
+            <input type="radio" name="type" id="tFinal" value="final" checked><label for="tFinal">Final</label>
+            <input type="radio" name="type" id="tFP" value="first_piece"><label for="tFP">First Piece</label>
+          </div>
+          <span class="hint" id="typeHint">First pieces go to the top of the queue and are due today.</span>
+        </div>
+        <div class="two">
+          <div class="field"><label for="fPart">Part number</label><input id="fPart" autocomplete="off" maxlength="60"></div>
+          <div class="field"><label for="fJob">Job / WO</label><input id="fJob" autocomplete="off" maxlength="40"></div>
+        </div>
+        <div class="two">
+          <div class="field"><label for="fDue">Due date</label><input id="fDue" type="date"></div>
+          <div class="field"><label for="fQty">Qty</label><input id="fQty" type="number" min="1" inputmode="numeric"></div>
+        </div>
+        <div class="field"><label for="fNotes">Notes</label><textarea id="fNotes" maxlength="300" placeholder="Where the parts are, customer, anything the inspector needs"></textarea></div>
+        <label class="check"><input type="checkbox" id="fExp"> Expedite (jumps ahead of first pieces)</label>
+        <div class="field" id="expWhyField" hidden><label for="fExpWhy">Reason for expediting</label><input id="fExpWhy" maxlength="140" placeholder="e.g. Truck leaves at 2:00, customer line down"></div>
+        <div class="err" id="formErr" role="alert"></div>
+        <button class="btn" type="submit" id="addBtn">Add to queue</button>
+        <div class="rule">
+          <span class="lbl">Queue order</span>
+          <ol>
+            <li>Expedited items, by due date</li>
+            <li>First pieces, in the order submitted</li>
+            <li>Finals, by due date, then order submitted</li>
+          </ol>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+/* ===== CONFIG: fill these in (Supabase > Project Settings > API) ===== */
+const SUPABASE_URL = "YOUR_SUPABASE_URL";        // e.g. https://abcd1234.supabase.co
+const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+/* ===================================================================== */
+
+(function () {
+  const T = "inspection_requests";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const pad = (n) => String(n).padStart(2, "0");
+  const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); };
+  const fmtDue = (s) => { if (!s) return "—"; const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }); };
+  const ms = (ts) => (ts ? Date.parse(ts) : 0);
+  const fmtTime = (ts) => ts ? new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+  const who = (email) => !email ? "Someone" : email === myEmail ? "you" : email.split("@")[0];
+
+  $("today").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+
+  let sb = null, myEmail = "", myId = "", items = [], open = null;
+
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 2200); }
+  function showBanner(msg) { const b = $("banner"); b.textContent = msg; b.hidden = !msg; }
+
+  /* ---------- ordering: expedite > first piece > final; then due; then submitted ---------- */
+  const tier = (it) => it.expedite ? 0 : it.type === "first_piece" ? 1 : 2;
+  function cmp(a, b) {
+    const t = tier(a) - tier(b); if (t) return t;
+    if (tier(a) !== 1 && a.due !== b.due) return a.due < b.due ? -1 : 1;
+    return ms(a.created_at) - ms(b.created_at);
+  }
+
+  /* ---------- rendering ---------- */
+  function chips(it) {
+    const t = todayStr();
+    let h = `<span class="chip ${it.dept}">${it.dept === "wire" ? "Wire Fab" : "Machine"}</span>`;
+    h += it.type === "first_piece" ? `<span class="chip fp">First Piece</span>` : `<span class="chip final">Final</span>`;
+    if (it.expedite) h += `<span class="chip exp">Expedite</span>`;
+    if (it.status !== "done") { if (it.due < t) h += `<span class="chip over">Past due</span>`; else if (it.due === t) h += `<span class="chip today">Due today</span>`; }
+    return h;
+  }
+  function rowActions(it, inNext) {
+    const go = inNext ? "btn" : "btn go";
+    const mine = it.created_by === myId;
+    const del = mine ? `<button class="btn ghost" data-act="del" data-id="${it.id}" aria-label="Remove ${esc(it.part)}">Remove</button>` : "";
+    if (it.status === "queued") return `<button class="${go}" data-act="start" data-id="${it.id}">Start</button>
+      <button class="btn ghost" data-act="${it.expedite ? "unexp" : "exp"}" data-id="${it.id}">${it.expedite ? "Remove expedite" : "Expedite"}</button>
+      <button class="btn ghost" data-act="hold" data-id="${it.id}">Hold</button>${del}`;
+    if (it.status === "in_progress") return `<button class="btn go" data-act="done" data-id="${it.id}">Complete</button>
+      <button class="btn ghost" data-act="requeue" data-id="${it.id}">Back to queue</button>
+      <button class="btn ghost" data-act="hold" data-id="${it.id}">Hold</button>`;
+    if (it.status === "hold") return `<button class="btn" data-act="requeue" data-id="${it.id}">Resume</button>${del}`;
+    return "";
+  }
+  function inlinePanel(it, style) {
+    if (!open || open.id !== it.id) return "";
+    const st = style ? ` style="${style}"` : "";
+    if (open.kind === "del") return `<div class="inline"${st}><span>Remove this request for everyone?</span><button class="btn danger" data-act="delYes" data-id="${it.id}">Remove</button><button class="btn ghost" data-act="cancel">Cancel</button></div>`;
+    const ph = open.kind === "hold" ? "Reason, e.g. parts not at inspection, missing print" : "Reason for expediting";
+    return `<div class="inline"${st}><input id="inlineReason" maxlength="140" placeholder="${ph}" aria-label="${ph}"><button class="btn" data-act="${open.kind === "hold" ? "holdYes" : "expYes"}" data-id="${it.id}">${open.kind === "hold" ? "Put on hold" : "Expedite"}</button><button class="btn ghost" data-act="cancel">Cancel</button></div>`;
+  }
+  function row(it, rank) {
+    const extra = [];
+    if (it.expedite && it.expedite_why) extra.push(`<div class="why">Expedited by ${esc(who(it.expedited_by))}: ${esc(it.expedite_why)}</div>`);
+    if (it.status === "hold") extra.push(`<div class="small"><span class="chip hold">On hold</span> ${esc(it.hold_why)} · ${esc(who(it.held_by))}</div>`);
+    if (it.status === "in_progress") extra.push(`<div class="small">Started by ${esc(who(it.started_by))} ${fmtTime(it.started_at)}</div>`);
+    if (it.status === "done") extra.push(`<div class="small">Completed by ${esc(who(it.completed_by))} ${fmtTime(it.completed_at)}</div>`);
+    if (it.notes) extra.push(`<div class="small">${esc(it.notes)}</div>`);
+    let line = `Due ${fmtDue(it.due)}`; if (it.qty) line += ` · Qty ${esc(it.qty)}`; line += ` · Added by ${esc(who(it.created_by_email))} ${fmtTime(it.created_at)}`;
+    return `<li class="row${it.expedite && it.status !== "done" ? " exp" : ""}">
+      <div class="rank">${rank ?? ""}</div>
+      <div class="body"><div class="line1"><span class="pn">${esc(it.part)}</span><span class="job">${esc(it.job)}</span></div>
+        <div class="chips">${chips(it)}</div><div class="small">${line}</div>${extra.join("")}</div>
+      <div class="actions">${rowActions(it)}</div>${inlinePanel(it)}</li>`;
+  }
+  function nextCard(it) {
+    if (!it) return `<div class="next empty"><div class="eyebrow">Next up</div><div>Nothing waiting for inspection.</div></div>`;
+    const meta = [`<span><b>Job</b> ${esc(it.job)}</span>`, `<span><b>Due</b> ${fmtDue(it.due)}</span>`];
+    if (it.qty) meta.push(`<span><b>Qty</b> ${esc(it.qty)}</span>`);
+    meta.push(`<span><b>From</b> ${esc(who(it.created_by_email))}</span>`);
+    return `<div class="next">
+      <div class="eyebrow">Next up · ${it.dept === "wire" ? "Wire Fab" : "Machine Shop"} · ${it.type === "first_piece" ? "First Piece" : "Final"}${it.expedite ? " · Expedited" : ""}</div>
+      <div class="part">${esc(it.part)}</div><div class="meta">${meta.join("")}</div>
+      ${it.expedite && it.expedite_why ? `<div class="note"><b>Expedited:</b> ${esc(it.expedite_why)}</div>` : ""}
+      ${it.notes ? `<div class="note">${esc(it.notes)}</div>` : ""}
+      <div class="actions" style="justify-content:flex-start">${rowActions(it, true)}</div>${inlinePanel(it, "grid-column:auto")}</div>`;
+  }
+  function render() {
+    const t = todayStr();
+    const queued = items.filter((i) => i.status === "queued").sort(cmp);
+    const bench = items.filter((i) => i.status === "in_progress").sort((a, b) => ms(a.started_at) - ms(b.started_at));
+    const hold = items.filter((i) => i.status === "hold").sort(cmp);
+    const done = items.filter((i) => i.status === "done").sort((a, b) => ms(b.completed_at) - ms(a.completed_at)).slice(0, 50);
+    const todayKey = new Date().toDateString();
+    $("cQueued").textContent = queued.length;
+    $("cOver").textContent = queued.concat(bench, hold).filter((i) => i.due < t).length;
+    $("cDone").textContent = items.filter((i) => i.status === "done" && i.completed_at && new Date(i.completed_at).toDateString() === todayKey).length;
+    $("nextBox").innerHTML = nextCard(queued[0]);
+    $("benchBox").hidden = !bench.length;
+    $("benchBox").innerHTML = bench.length ? `<h2>On the bench <span class="n">${bench.length}</span></h2><ol class="list" style="border:2px solid var(--ok)">${bench.map((i) => row(i, "▸")).join("")}</ol>` : "";
+    const rest = queued.slice(1);
+    $("qCount").textContent = rest.length ? `· ${rest.length} after next` : "";
+    $("queue").innerHTML = rest.length ? rest.map((i, n) => row(i, n + 2)).join("") : `<li class="row"><div></div><div class="small">No other requests waiting.</div><div></div></li>`;
+    $("holdWrap").hidden = !hold.length; $("hCount").textContent = hold.length;
+    $("holdList").innerHTML = hold.map((i) => row(i, "")).join("");
+    $("dCount").textContent = done.length;
+    $("doneList").innerHTML = done.length ? done.map((i) => row(i, "✓")).join("") : `<li class="row"><div></div><div class="small">Completed inspections show here.</div><div></div></li>`;
+    if (open) { const r = $("inlineReason"); if (r) r.focus(); }
+  }
+
+  /* ---------- data ---------- */
+  async function load() {
+    const since = new Date(Date.now() - 30 * 864e5).toISOString();
+    const { data, error } = await sb.from(T).select("*").or(`status.neq.done,completed_at.gte.${since}`).order("created_at");
+    if (error) { showBanner("Couldn't load the queue: " + error.message); return; }
+    showBanner(""); items = data || []; render();
+  }
+  let loadTimer = null;
+  const scheduleLoad = () => { clearTimeout(loadTimer); loadTimer = setTimeout(load, 250); };
+
+  async function write(id, patch, okMsg) {
+    const { error } = await sb.from(T).update(patch).eq("id", id);
+    if (error) { toast("Couldn't save: " + error.message); return; }
+    toast(okMsg); await load();
+  }
+  async function act(kind, id) {
+    switch (kind) {
+      case "start": return write(id, { status: "in_progress" }, "Started");
+      case "done": return write(id, { status: "done" }, "Marked complete");
+      case "requeue": return write(id, { status: "queued" }, "Back in the queue");
+      case "unexp": return write(id, { expedite: false }, "Expedite removed");
+      case "hold": case "exp": case "del": open = { id, kind }; return render();
+      case "cancel": open = null; return render();
+      case "holdYes": case "expYes": {
+        const el = $("inlineReason"); const r = (el.value || "").trim();
+        if (!r) { el.placeholder = "A reason is required"; el.focus(); return; }
+        open = null;
+        return kind === "holdYes" ? write(id, { status: "hold", hold_why: r }, "Put on hold") : write(id, { expedite: true, expedite_why: r }, "Expedited");
+      }
+      case "delYes": {
+        open = null;
+        const { error, count } = await sb.from(T).delete({ count: "exact" }).eq("id", id);
+        if (error) toast("Couldn't remove: " + error.message); else if (!count) toast("Only the person who added it can remove it."); else toast("Removed");
+        return load();
+      }
+    }
+  }
+  document.addEventListener("click", (e) => { const b = e.target.closest("[data-act]"); if (b && !b.disabled && sb) act(b.dataset.act, b.dataset.id); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.id === "inlineReason") { e.preventDefault(); const b = e.target.parentElement.querySelector("[data-act$='Yes']"); if (b) b.click(); }
+    if (e.key === "Escape" && open) { open = null; render(); }
+  });
+
+  /* ---------- add form ---------- */
+  const fDue = $("fDue"); fDue.value = todayStr();
+  function syncForm() {
+    const dept = document.querySelector("input[name=dept]:checked").value;
+    $("tFP").disabled = dept === "wire";
+    if (dept === "wire" && $("tFP").checked) $("tFinal").checked = true;
+    const fp = $("tFP").checked;
+    if (fp) { fDue.value = todayStr(); fDue.disabled = true; } else fDue.disabled = false;
+    $("typeHint").textContent = dept === "wire" ? "Wire Fab requests are finals." : "First pieces go to the top of the queue and are due today.";
+    $("expWhyField").hidden = !$("fExp").checked;
+  }
+  document.querySelectorAll("input[name=dept],input[name=type]").forEach((r) => r.addEventListener("change", syncForm));
+  $("fExp").addEventListener("change", syncForm); syncForm();
+
+  $("addForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const err = $("formErr"); err.textContent = "";
+    const dept = document.querySelector("input[name=dept]:checked").value;
+    const type = document.querySelector("input[name=type]:checked").value;
+    const part = $("fPart").value.trim(), job = $("fJob").value.trim();
+    const due = type === "first_piece" ? todayStr() : fDue.value;
+    const qty = parseInt($("fQty").value, 10);
+    const expedite = $("fExp").checked, expediteWhy = $("fExpWhy").value.trim();
+    if (!part) { err.textContent = "Enter a part number."; return $("fPart").focus(); }
+    if (!job) { err.textContent = "Enter the job or work order number."; return $("fJob").focus(); }
+    if (!due) { err.textContent = "Pick a due date."; return fDue.focus(); }
+    if (expedite && !expediteWhy) { err.textContent = "Say why this needs expediting."; return $("fExpWhy").focus(); }
+    $("addBtn").disabled = true;
+    const { error } = await sb.from(T).insert({ dept, type, part, job, due, qty: qty > 0 ? qty : null, notes: $("fNotes").value.trim(), expedite, expedite_why: expedite ? expediteWhy : "" });
+    $("addBtn").disabled = false;
+    if (error) { err.textContent = "Couldn't save the request: " + error.message; return; }
+    ["fPart", "fJob", "fQty", "fNotes", "fExpWhy"].forEach((id) => ($(id).value = ""));
+    $("fExp").checked = false; syncForm(); toast("Added to queue"); load();
+  });
+
+  /* ---------- auth + boot ---------- */
+  $("signinForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("sEmail").value.trim(); const err = $("sErr"); err.textContent = "";
+    if (!email) { err.textContent = "Enter your work email."; return; }
+    $("sBtn").disabled = true;
+    const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname } });
+    $("sBtn").disabled = false;
+    err.textContent = error ? (/signups? not allowed|not found/i.test(error.message) ? "That email hasn't been added yet. Ask quality to add you." : "Couldn't send the link: " + error.message) : "";
+    if (!error) { err.style.color = "var(--ok)"; err.textContent = "Check your email for the sign-in link."; }
+  });
+  $("signOut").addEventListener("click", () => sb.auth.signOut());
+
+  let channel = null, poll = null;
+  function enter(session) {
+    myEmail = session.user.email || ""; myId = session.user.id;
+    $("signinForm").hidden = true; $("app").hidden = false; $("userbar").hidden = false; $("whoami").textContent = myEmail;
+    load();
+    if (!channel) channel = sb.channel("iq").on("postgres_changes", { event: "*", schema: "public", table: T }, scheduleLoad).subscribe();
+    if (!poll) poll = setInterval(load, 60000);  // safety net if the live connection drops
+  }
+  function leave() {
+    items = []; $("app").hidden = true; $("userbar").hidden = true; $("signinForm").hidden = false;
+    if (channel) { sb.removeChannel(channel); channel = null; } clearInterval(poll); poll = null;
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && sb && !$("app").hidden) load(); });
+
+  if (!window.supabase || SUPABASE_URL.startsWith("YOUR_")) { $("configMsg").hidden = false; return; }
+  sb = window.supabase.createClient(https://supabase.com/dashboard/project/ewfxiwwinorfpjshcpgm, eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3Znhpd3dpbm9yZnBqc2hjcGdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1OTg4OTksImV4cCI6MjEwODE3NDg5OX0.ocP0eqFCxiLqoVGhs_i6xNF7_dxoCkajClL2meydn8k);
+  sb.auth.onAuthStateChange((_evt, session) => (session ? enter(session) : leave()));
+  sb.auth.getSession().then(({ data }) => (data.session ? enter(data.session) : leave()));
+})();
+</script>
+</body>
+</html>
