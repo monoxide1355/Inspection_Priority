@@ -72,6 +72,7 @@ h1 { font-family: var(--f-display); font-weight: 700; font-size: 2.3rem; letter-
 .count span { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
 @media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.grid.solo { grid-template-columns: minmax(0, 1fr); }
 .formcol { min-width: 0; }
 .col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 h2 { font-family: var(--f-display); font-weight: 600; font-size: 1.15rem; text-transform: uppercase; letter-spacing: .06em; margin: 0; color: var(--muted); display: flex; align-items: center; gap: 8px; }
@@ -216,7 +217,7 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
       </details>
     </div>
 
-    <div class="formcol">
+    <div class="formcol" id="formcol" hidden>
       <form class="card" id="addForm" novalidate>
         <h2>Add inspection request</h2>
         <div class="field">
@@ -479,7 +480,12 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     $("addBtn").disabled = true;
     const { error } = await sb.from(T).insert({ dept, type, part, job, due, qty: qty > 0 ? qty : null, notes: $("fNotes").value.trim(), expedite, expedite_why: expedite ? expediteWhy : "" });
     $("addBtn").disabled = false;
-    if (error) { err.textContent = "Couldn't save the request: " + error.message; return; }
+    if (error) {
+      err.textContent = /row-level security/i.test(error.message)
+        ? "You're not on the list of people who can add requests. Ask quality to add you."
+        : "Couldn't save the request: " + error.message;
+      return;
+    }
     ["fPart", "fJob", "fQty", "fNotes", "fExpWhy"].forEach((id) => ($(id).value = ""));
     $("fExp").checked = false; syncForm(); toast("Added to queue"); load();
   });
@@ -502,12 +508,17 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     myEmail = session.user.email || ""; myId = session.user.id;
     $("signinForm").hidden = true; $("app").hidden = false; $("userbar").hidden = false; $("whoami").textContent = myEmail;
     load();
-    sb.rpc("can_reorder").then(({ data, error }) => { canReorder = !error && data === true; render(); });
+    sb.rpc("can_reorder").then(({ data, error }) => { canReorder = !error && data === true; applyRole(); render(); });
     if (!channel) channel = sb.channel("iq").on("postgres_changes", { event: "*", schema: "public", table: T }, scheduleLoad).subscribe();
     if (!poll) poll = setInterval(load, 60000);  // safety net if the live connection drops
   }
+  // People on the approved list can add and reorder; everyone else works the queue.
+  function applyRole() {
+    $("formcol").hidden = !canReorder;
+    $("app").classList.toggle("solo", !canReorder);
+  }
   function leave() {
-    items = []; canReorder = false; $("app").hidden = true; $("userbar").hidden = true; $("signinForm").hidden = false;
+    items = []; canReorder = false; applyRole(); $("app").hidden = true; $("userbar").hidden = true; $("signinForm").hidden = false;
     if (channel) { sb.removeChannel(channel); channel = null; } clearInterval(poll); poll = null;
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden && sb && !$("app").hidden) load(); });
