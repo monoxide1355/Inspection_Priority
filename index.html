@@ -257,11 +257,18 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
   </div>
 </div>
 <div class="toast" id="toast" hidden></div>
+<script>
+/* Shows any script error on the page, including a typo when editing the config lines below. */
+window.addEventListener("error", (e) => {
+  const b = document.getElementById("banner");
+  if (b) { b.hidden = false; b.textContent = "Page error: " + (e.message || "unknown") + (e.lineno ? " (line " + e.lineno + ")" : "") + ". Check the SUPABASE_URL and SUPABASE_ANON_KEY lines in index.html: each value must be inside its own pair of double quotes."; }
+});
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 /* ===== CONFIG: fill these in (Supabase > Project Settings > API) ===== */
-const SUPABASE_URL = "YOUR_SUPABASE_URL";        // e.g. https://abcd1234.supabase.co
-const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
+const SUPABASE_URL = "https://ewfxiwwinorfpjshcpgm.supabase.co";        // e.g. https://abcd1234.supabase.co
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3Znhpd3dpbm9yZnBqc2hjcGdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1OTg4OTksImV4cCI6MjEwODE3NDg5OX0.ocP0eqFCxiLqoVGhs_i6xNF7_dxoCkajClL2meydn8k";
 /* ===================================================================== */
 
 (function () {
@@ -473,10 +480,23 @@ const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden && sb && !$("app").hidden) load(); });
 
-  if (!window.supabase || SUPABASE_URL.startsWith("YOUR_")) { $("configMsg").hidden = false; return; }
-  sb = window.supabase.createClient(https://supabase.com/dashboard/project/ewfxiwwinorfpjshcpgm, eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3Znhpd3dpbm9yZnBqc2hjcGdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1OTg4OTksImV4cCI6MjEwODE3NDg5OX0.ocP0eqFCxiLqoVGhs_i6xNF7_dxoCkajClL2meydn8k);
+  function setupError(msg) {
+    $("configMsg").hidden = false;
+    $("configMsg").querySelector("p").textContent = msg;
+  }
+  if (SUPABASE_URL.startsWith("YOUR_") || SUPABASE_ANON_KEY.startsWith("YOUR_")) { $("configMsg").hidden = false; return; }
+  if (!window.supabase) { setupError("The Supabase library didn't load. Check that this computer can reach cdn.jsdelivr.net (a company firewall may block it), then reload."); return; }
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(SUPABASE_URL.trim())) {
+    setupError('SUPABASE_URL doesn\'t look right. It should be just the Project URL, like https://abcd1234.supabase.co, with nothing after .co. It is currently: "' + SUPABASE_URL + '"');
+    return;
+  }
+  try {
+    sb = window.supabase.createClient(SUPABASE_URL.trim().replace(/\/$/, ""), SUPABASE_ANON_KEY.trim());
+  } catch (e) { setupError("Couldn't connect to Supabase: " + (e && e.message ? e.message : e)); return; }
   sb.auth.onAuthStateChange((_evt, session) => (session ? enter(session) : leave()));
-  sb.auth.getSession().then(({ data }) => (data.session ? enter(data.session) : leave()));
+  sb.auth.getSession()
+    .then(({ data }) => (data.session ? enter(data.session) : leave()))
+    .catch((e) => { leave(); showBanner("Sign-in check failed: " + (e && e.message ? e.message : e)); });
 })();
 </script>
 </body>
