@@ -121,6 +121,9 @@ h2 .n { font-variant-numeric: tabular-nums; color: var(--ink); }
 .actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 .inline { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--sunk); padding: 8px; border-radius: 6px; }
 .inline input { flex: 1 1 180px; min-width: 0; }
+.mover { display: inline-flex; gap: 2px; margin-right: 4px; }
+.btn.mv { padding: 6px 10px; font-size: .95rem; line-height: 1; }
+.next .mover .btn.mv { background: transparent; color: var(--tag-ink); border-color: var(--tag-ink); }
 @media (max-width: 600px) { .row { grid-template-columns: 28px minmax(0, 1fr); } .row .actions { grid-column: 2 / -1; justify-content: flex-start; } .next .part { font-size: 2rem; } }
 
 /* buttons + form */
@@ -250,6 +253,7 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
             <li>Expedited items, by due date</li>
             <li>First pieces, in the order submitted</li>
             <li>Finals, by due date, then order submitted</li>
+            <li>Use ↑ ↓ to reorder items with the same due date</li>
           </ol>
         </div>
       </form>
@@ -294,8 +298,13 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   function cmp(a, b) {
     const t = tier(a) - tier(b); if (t) return t;
     if (tier(a) !== 1 && a.due !== b.due) return a.due < b.due ? -1 : 1;
-    return ms(a.created_at) - ms(b.created_at);
+    return rank(a) - rank(b);
   }
+  // Manual order inside a group (same tier, and same due date except for first pieces).
+  const rank = (it) => (typeof it.sort_rank === "number" ? it.sort_rank : ms(it.created_at));
+  const groupKey = (it) => tier(it) + "|" + (tier(it) === 1 ? "" : it.due);
+  let pos = {};   // id -> {i, n} position within its group, rebuilt each render
+  let queuedSorted = [];
 
   /* ---------- rendering ---------- */
   function chips(it) {
@@ -308,9 +317,13 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   }
   function rowActions(it, inNext) {
     const go = inNext ? "btn" : "btn go";
+    const p = pos[it.id];
+    const mv = it.status === "queued" && p && p.n > 1
+      ? `<span class="mover"><button class="btn ghost mv" data-act="up" data-id="${it.id}" aria-label="Move ${esc(it.part)} up"${p.i === 0 ? " disabled" : ""}>↑</button><button class="btn ghost mv" data-act="down" data-id="${it.id}" aria-label="Move ${esc(it.part)} down"${p.i === p.n - 1 ? " disabled" : ""}>↓</button></span>`
+      : "";
     const mine = it.created_by === myId;
     const del = mine ? `<button class="btn ghost" data-act="del" data-id="${it.id}" aria-label="Remove ${esc(it.part)}">Remove</button>` : "";
-    if (it.status === "queued") return `<button class="${go}" data-act="start" data-id="${it.id}">Start</button>
+    if (it.status === "queued") return `${mv}<button class="${go}" data-act="start" data-id="${it.id}">Start</button>
       <button class="btn ghost" data-act="${it.expedite ? "unexp" : "exp"}" data-id="${it.id}">${it.expedite ? "Remove expedite" : "Expedite"}</button>
       <button class="btn ghost" data-act="hold" data-id="${it.id}">Hold</button>${del}`;
     if (it.status === "in_progress") return `<button class="btn go" data-act="done" data-id="${it.id}">Complete</button>
@@ -355,6 +368,10 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   function render() {
     const t = todayStr();
     const queued = items.filter((i) => i.status === "queued").sort(cmp);
+    queuedSorted = queued; pos = {};
+    const groups = {};
+    queued.forEach((it) => (groups[groupKey(it)] = groups[groupKey(it)] || []).push(it));
+    Object.values(groups).forEach((g) => g.forEach((it, i) => (pos[it.id] = { i, n: g.length })));
     const bench = items.filter((i) => i.status === "in_progress").sort((a, b) => ms(a.started_at) - ms(b.started_at));
     const hold = items.filter((i) => i.status === "hold").sort(cmp);
     const done = items.filter((i) => i.status === "done").sort((a, b) => ms(b.completed_at) - ms(a.completed_at)).slice(0, 50);
@@ -390,12 +407,26 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     if (error) { toast("Couldn't save: " + error.message); return; }
     toast(okMsg); await load();
   }
+  async function move(id, dir) {
+    const it = queuedSorted.find((x) => x.id === id); if (!it) return;
+    const g = queuedSorted.filter((x) => groupKey(x) === groupKey(it));
+    const i = g.indexOf(it), j = i + dir;
+    if (j < 0 || j >= g.length) return;
+    const nb = g[j], beyond = g[j + dir];
+    const STEP = 60000;
+    const r = beyond ? (rank(nb) + rank(beyond)) / 2 : rank(nb) + dir * STEP;
+    it.sort_rank = r; render();                        // move on screen right away
+    const { error } = await sb.from(T).update({ sort_rank: r }).eq("id", id);
+    if (error) toast("Couldn't move: " + error.message);
+    scheduleLoad();
+  }
   async function act(kind, id) {
     switch (kind) {
       case "start": return write(id, { status: "in_progress" }, "Started");
       case "done": return write(id, { status: "done" }, "Marked complete");
       case "requeue": return write(id, { status: "queued" }, "Back in the queue");
       case "unexp": return write(id, { expedite: false }, "Expedite removed");
+      case "up": case "down": return move(id, kind === "up" ? -1 : 1);
       case "hold": case "exp": case "del": open = { id, kind }; return render();
       case "cancel": open = null; return render();
       case "holdYes": case "expYes": {
