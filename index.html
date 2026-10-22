@@ -182,6 +182,11 @@ textarea { resize: vertical; min-height: 54px; }
 .check { display: flex; gap: 8px; align-items: center; font-weight: 600; }
 .check input { width: auto; accent-color: var(--expedite); }
 .osp-check input { accent-color: var(--osp); }
+.form-btns { display: flex; gap: 8px; }
+.form-btns #addBtn { flex: 1; }
+form.card.editing { border-top-color: var(--rank-bg); box-shadow: 0 0 0 2px var(--rank-bg); }
+form.card.editing #formTitle { color: var(--rank-bg); }
+.row.editing-row { box-shadow: inset 0 0 0 2px var(--rank-bg); }
 .hint { font-size: .8rem; color: var(--muted); }
 .err { color: var(--expedite); font-size: .85rem; min-height: 1em; }
 .rule { font-size: .82rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
@@ -204,7 +209,7 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
   <header>
     <div>
       <h1>Inspection Queue</h1>
-      <div class="sub"><span id="today"></span> · <span title="Page version">v2026-10-22e</span></div>
+      <div class="sub"><span id="today"></span> · <span title="Page version">v2026-10-22f</span></div>
     </div>
     <div class="userbar" id="userbar" hidden><span id="whoami"></span><button type="button" class="btn ghost" id="signOut">Sign out</button></div>
     <div class="counts" aria-live="polite">
@@ -247,7 +252,7 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
 
     <div class="formcol" id="formcol" hidden>
       <form class="card" id="addForm" novalidate>
-        <h2>Add inspection request</h2>
+        <h2 id="formTitle">Add inspection request</h2>
         <div class="field">
           <span class="lbl" id="deptLbl">Department</span>
           <div class="seg" role="radiogroup" aria-labelledby="deptLbl">
@@ -274,10 +279,10 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
         <div class="field"><label for="fCust">Customer</label><input id="fCust" autocomplete="off" maxlength="80"></div>
         <div class="field"><label for="fNotes">Notes</label><textarea id="fNotes" maxlength="300" placeholder="Where the parts are, anything the inspector needs"></textarea></div>
         <label class="check osp-check"><input type="checkbox" id="fOsp"> Outside process (OSP) after inspection</label>
-        <label class="check"><input type="checkbox" id="fExp"> Expedite (jumps ahead of first pieces)</label>
+        <label class="check" id="expRow"><input type="checkbox" id="fExp"> Expedite (jumps ahead of first pieces)</label>
         <div class="field" id="expWhyField" hidden><label for="fExpWhy">Reason for expediting</label><input id="fExpWhy" maxlength="140" placeholder="e.g. Truck leaves at 2:00, customer line down"></div>
         <div class="err" id="formErr" role="alert"></div>
-        <button class="btn" type="submit" id="addBtn">Add to queue</button>
+        <div class="form-btns"><button class="btn" type="submit" id="addBtn">Add to queue</button><button class="btn ghost" type="button" id="cancelEdit" hidden>Cancel</button></div>
         <div class="rule">
           <span class="lbl">Queue order</span>
           <ol>
@@ -319,7 +324,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
   $("today").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
-  let sb = null, myEmail = "", myId = "", items = [], open = null, canReorder = false;
+  let sb = null, myEmail = "", myId = "", items = [], open = null, canReorder = false, editing = null;
 
   function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 2200); }
   function showBanner(msg) { const b = $("banner"); b.textContent = msg; b.hidden = !msg; }
@@ -361,14 +366,15 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       ? `<span class="mover"><button class="btn ghost mv" data-act="up" data-id="${it.id}" aria-label="Move ${esc(it.part)} up"${p.i === 0 ? " disabled" : ""}>↑</button><button class="btn ghost mv" data-act="down" data-id="${it.id}" aria-label="Move ${esc(it.part)} down"${p.i === p.n - 1 ? " disabled" : ""}>↓</button></span>`
       : "";
     const mine = it.created_by === myId;
+    const edit = canReorder ? `<button class="btn ghost" data-act="edit" data-id="${it.id}" aria-label="Edit ${esc(it.part)}">Edit</button>` : "";
     const del = mine ? `<button class="btn ghost" data-act="del" data-id="${it.id}" aria-label="Remove ${esc(it.part)}">Remove</button>` : "";
     if (it.status === "queued") return `${mv}<button class="${go}" data-act="start" data-id="${it.id}">Start</button>
       ${canReorder ? `<button class="btn ghost" data-act="${it.expedite ? "unexp" : "exp"}" data-id="${it.id}">${it.expedite ? "Remove expedite" : "Expedite"}</button>` : ""}
-      <button class="btn ghost" data-act="hold" data-id="${it.id}">Hold</button>${del}`;
+      <button class="btn ghost" data-act="hold" data-id="${it.id}">Hold</button>${edit}${del}`;
     if (it.status === "in_progress") return `<button class="btn go" data-act="done" data-id="${it.id}">Complete</button>
       <button class="btn ghost" data-act="requeue" data-id="${it.id}">Back to queue</button>
-      <button class="btn ghost" data-act="hold" data-id="${it.id}">Hold</button>`;
-    if (it.status === "hold") return `<button class="btn" data-act="requeue" data-id="${it.id}">Resume</button>${del}`;
+      <button class="btn ghost" data-act="hold" data-id="${it.id}">Hold</button>${edit}`;
+    if (it.status === "hold") return `<button class="btn" data-act="requeue" data-id="${it.id}">Resume</button>${edit}${del}`;
     return "";
   }
   function inlinePanel(it, style) {
@@ -386,7 +392,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     if (it.status === "done") extra.push(`<div class="small">Completed by ${esc(who(it.completed_by))} ${fmtTime(it.completed_at)}</div>`);
     if (it.notes) extra.push(`<div class="small">${esc(it.notes)}</div>`);
     let line = `Due ${fmtDue(it.due)}`; if (it.qty) line += ` · Qty ${esc(it.qty)}`; line += ` · Added by ${esc(who(it.created_by_email))} ${fmtTime(it.created_at)}`;
-    return `<li class="row${it.expedite && it.status !== "done" ? " exp" : ""}">
+    return `<li class="row${it.expedite && it.status !== "done" ? " exp" : ""}${editing && editing.id === it.id ? " editing-row" : ""}">
       <div class="rank${typeof rank === "number" ? " num" : ""}"${typeof rank === "number" ? ` aria-label="Queue position ${rank}"` : ""}>${rank ?? ""}</div>
       <div class="body"><div class="line1"><span><span class="fl">Part Number:</span><span class="pn">${esc(it.part)}</span></span><span><span class="fl">Job Number:</span><span class="job">${esc(it.job)}</span></span>${it.customer ? `<span><span class="fl">Customer:</span><span class="cust">${esc(it.customer)}</span></span>` : ""}</div>
         <div class="chips">${chips(it)}</div><div class="small">${line}</div>${extra.join("")}</div>
@@ -441,7 +447,13 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     const since = new Date(Date.now() - 30 * 864e5).toISOString();
     const { data, error } = await sb.from(T).select("*").or(`status.neq.done,completed_at.gte.${since}`).order("created_at");
     if (error) { showBanner("Couldn't load the queue: " + error.message); return; }
-    showBanner(""); items = data || []; render();
+    showBanner(""); items = data || [];
+    if (editing) {
+      const fresh = items.find((x) => x.id === editing.id);
+      if (!fresh || fresh.status === "done") { endEdit(); toast("That request was completed or removed, so editing was closed."); }
+      else editing = fresh;
+    }
+    render();
   }
   let loadTimer = null;
   const scheduleLoad = () => { clearTimeout(loadTimer); loadTimer = setTimeout(load, 250); };
@@ -472,6 +484,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       case "unexp": if (!canReorder) return; return write(id, { expedite: false }, "Expedite removed");
       case "up": case "down": return move(id, kind === "up" ? -1 : 1);
       case "exp": if (!canReorder) return; open = { id, kind }; return render();
+      case "edit": if (!canReorder) return; return startEdit(id);
       case "hold": case "del": open = { id, kind }; return render();
       case "cancel": open = null; return render();
       case "holdYes": case "expYes": {
@@ -492,6 +505,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.id === "inlineReason") { e.preventDefault(); const b = e.target.parentElement.querySelector("[data-act$='Yes']"); if (b) b.click(); }
     if (e.key === "Escape" && open) { open = null; render(); }
+    else if (e.key === "Escape" && editing) endEdit();
   });
 
   /* ---------- add form ---------- */
@@ -501,10 +515,41 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     $("tFP").disabled = dept === "wire";
     if (dept === "wire" && $("tFP").checked) $("tFinal").checked = true;
     const fp = $("tFP").checked;
-    if (fp) { fDue.value = todayStr(); fDue.disabled = true; } else fDue.disabled = false;
+    if (fp) { fDue.value = editing && editing.type === "first_piece" ? editing.due : todayStr(); fDue.disabled = true; } else fDue.disabled = false;
     $("typeHint").textContent = dept === "wire" ? "Wire Fab requests are finals." : "First pieces go to the top of the queue and are due today.";
-    $("expWhyField").hidden = !$("fExp").checked;
+    $("expRow").hidden = !!editing;
+    $("expWhyField").hidden = !!editing || !$("fExp").checked;
   }
+
+  /* ---------- edit an existing request (approved people) ---------- */
+  function setRadio(name, value) { const r = document.querySelector(`input[name=${name}][value=${value}]`); if (r) r.checked = true; }
+  function startEdit(id) {
+    const it = items.find((x) => x.id === id); if (!it) return;
+    editing = it; open = null;
+    setRadio("dept", it.dept); setRadio("type", it.type);
+    $("fPart").value = it.part || ""; $("fJob").value = it.job || "";
+    fDue.value = it.due || todayStr(); $("fQty").value = it.qty || "";
+    $("fCust").value = it.customer || ""; $("fNotes").value = it.notes || "";
+    $("fOsp").checked = !!it.osp; $("fExp").checked = false; $("formErr").textContent = "";
+    $("formTitle").textContent = "Edit request: " + it.part;
+    $("addBtn").textContent = "Save changes"; $("cancelEdit").hidden = false;
+    $("addForm").classList.add("editing");
+    syncForm(); render();
+    $("addForm").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("fPart").focus({ preventScroll: true });
+  }
+  function endEdit() {
+    if (!editing) return;
+    editing = null;
+    ["fPart", "fJob", "fCust", "fQty", "fNotes", "fExpWhy"].forEach((id) => ($(id).value = ""));
+    $("fOsp").checked = false; $("fExp").checked = false; fDue.value = todayStr();
+    setRadio("dept", "machine"); setRadio("type", "final");
+    $("formTitle").textContent = "Add inspection request";
+    $("addBtn").textContent = "Add to queue"; $("cancelEdit").hidden = true; $("formErr").textContent = "";
+    $("addForm").classList.remove("editing");
+    syncForm(); render();
+  }
+  $("cancelEdit").addEventListener("click", endEdit);
   document.querySelectorAll("input[name=dept],input[name=type]").forEach((r) => r.addEventListener("change", syncForm));
   $("fExp").addEventListener("change", syncForm); syncForm();
 
@@ -520,6 +565,17 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     if (!part) { err.textContent = "Enter a part number."; return $("fPart").focus(); }
     if (!job) { err.textContent = "Enter the job or work order number."; return $("fJob").focus(); }
     if (!due) { err.textContent = "Pick a due date."; return fDue.focus(); }
+    if (editing) {
+      const patch = { dept, type, part, job, due, qty: qty > 0 ? qty : null, customer: $("fCust").value.trim(), notes: $("fNotes").value.trim(), osp: $("fOsp").checked };
+      $("addBtn").disabled = true;
+      const { error } = await sb.from(T).update(patch).eq("id", editing.id);
+      $("addBtn").disabled = false;
+      if (error) {
+        err.textContent = /permission/i.test(error.message) ? "You're not on the list of people who can edit requests." : "Couldn't save changes: " + error.message;
+        return;
+      }
+      endEdit(); toast("Changes saved"); return load();
+    }
     if (expedite && !expediteWhy) { err.textContent = "Say why this needs expediting."; return $("fExpWhy").focus(); }
     $("addBtn").disabled = true;
     const { error } = await sb.from(T).insert({ dept, type, part, job, customer: $("fCust").value.trim(), osp: $("fOsp").checked, due, qty: qty > 0 ? qty : null, notes: $("fNotes").value.trim(), expedite, expedite_why: expedite ? expediteWhy : "" });
@@ -562,7 +618,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     $("app").classList.toggle("solo", !canReorder);
   }
   function leave() {
-    items = []; canReorder = false; applyRole(); $("app").hidden = true; $("userbar").hidden = true; $("signinForm").hidden = false;
+    endEdit(); items = []; canReorder = false; applyRole(); $("app").hidden = true; $("userbar").hidden = true; $("signinForm").hidden = false;
     if (channel) { sb.removeChannel(channel); channel = null; } clearInterval(poll); poll = null;
   }
   document.addEventListener("visibilitychange", () => { if (!document.hidden && sb && !$("app").hidden) load(); });
