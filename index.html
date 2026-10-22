@@ -25,6 +25,7 @@
   --expedite-soft: #fbe0e0;
   --ok: #2e7d4f;
   --ok-soft: #dcefe3;
+  --rank: #1a5fc4;
   --on-ok: #ffffff;
   --hold: #8a6a00;
   --hold-soft: #f5ecc8;
@@ -38,7 +39,7 @@
     --bg: #14181d; --surface: #1c2128; --sunk: #252b33; --ink: #e6e9ed; --muted: #9aa4b1; --line: #343c46;
     --tag: #f2b705; --tag-ink: #241a00;
     --wire: #e08a55; --wire-soft: #3a2619; --machine: #7fb0dd; --machine-soft: #1d2f40;
-    --expedite: #ff6b6b; --expedite-soft: #3d1c1e; --ok: #6cc596; --ok-soft: #173426; --on-ok: #0d2117;
+    --expedite: #ff6b6b; --expedite-soft: #3d1c1e; --ok: #6cc596; --ok-soft: #173426; --on-ok: #0d2117; --rank: #7db4ff;
     --hold: #e0c15a; --hold-soft: #362d10; --focus: #7fb0dd;
     color-scheme: dark;
   }
@@ -47,7 +48,7 @@
   --bg: #14181d; --surface: #1c2128; --sunk: #252b33; --ink: #e6e9ed; --muted: #9aa4b1; --line: #343c46;
   --tag: #f2b705; --tag-ink: #241a00;
   --wire: #e08a55; --wire-soft: #3a2619; --machine: #7fb0dd; --machine-soft: #1d2f40;
-  --expedite: #ff6b6b; --expedite-soft: #3d1c1e; --ok: #6cc596; --ok-soft: #173426; --on-ok: #0d2117;
+  --expedite: #ff6b6b; --expedite-soft: #3d1c1e; --ok: #6cc596; --ok-soft: #173426; --on-ok: #0d2117; --rank: #7db4ff;
   --hold: #e0c15a; --hold-soft: #362d10; --focus: #7fb0dd;
   color-scheme: dark;
 }
@@ -102,11 +103,13 @@ h2 .n { font-variant-numeric: tabular-nums; color: var(--ink); }
 .row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); align-items: start; }
 .row:first-child { border-top: 0; }
 .row.exp { box-shadow: inset 4px 0 0 var(--expedite); }
-.rank { font-family: var(--f-display); font-weight: 600; font-size: 1.5rem; line-height: 1.1; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.rank { font-family: var(--f-display); font-weight: 700; font-size: 1.6rem; line-height: 1.1; color: var(--rank); font-variant-numeric: tabular-nums; text-align: right; }
 .body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .line1 { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
 .pn { font-family: var(--f-mono); font-weight: 500; font-size: 1rem; overflow-wrap: anywhere; }
-.job { font-family: var(--f-mono); font-size: .85rem; color: var(--muted); }
+.job { font-family: var(--f-mono); font-size: .9rem; }
+.fl { font-family: var(--f-body); font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.next .part-lbl { font-size: .78rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; margin-bottom: -6px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
 .chip.wire { background: var(--wire-soft); color: var(--wire); }
@@ -325,7 +328,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     const mine = it.created_by === myId;
     const del = mine ? `<button class="btn ghost" data-act="del" data-id="${it.id}" aria-label="Remove ${esc(it.part)}">Remove</button>` : "";
     if (it.status === "queued") return `${mv}<button class="${go}" data-act="start" data-id="${it.id}">Start</button>
-      <button class="btn ghost" data-act="${it.expedite ? "unexp" : "exp"}" data-id="${it.id}">${it.expedite ? "Remove expedite" : "Expedite"}</button>
+      ${canReorder ? `<button class="btn ghost" data-act="${it.expedite ? "unexp" : "exp"}" data-id="${it.id}">${it.expedite ? "Remove expedite" : "Expedite"}</button>` : ""}
       <button class="btn ghost" data-act="hold" data-id="${it.id}">Hold</button>${del}`;
     if (it.status === "in_progress") return `<button class="btn go" data-act="done" data-id="${it.id}">Complete</button>
       <button class="btn ghost" data-act="requeue" data-id="${it.id}">Back to queue</button>
@@ -350,18 +353,18 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     let line = `Due ${fmtDue(it.due)}`; if (it.qty) line += ` · Qty ${esc(it.qty)}`; line += ` · Added by ${esc(who(it.created_by_email))} ${fmtTime(it.created_at)}`;
     return `<li class="row${it.expedite && it.status !== "done" ? " exp" : ""}">
       <div class="rank">${rank ?? ""}</div>
-      <div class="body"><div class="line1"><span class="pn">${esc(it.part)}</span><span class="job">${esc(it.job)}</span></div>
+      <div class="body"><div class="line1"><span><span class="fl">Part Number:</span><span class="pn">${esc(it.part)}</span></span><span><span class="fl">Job Number:</span><span class="job">${esc(it.job)}</span></span></div>
         <div class="chips">${chips(it)}</div><div class="small">${line}</div>${extra.join("")}</div>
       <div class="actions">${rowActions(it)}</div>${inlinePanel(it)}</li>`;
   }
   function nextCard(it) {
     if (!it) return `<div class="next empty"><div class="eyebrow">Next up</div><div>Nothing waiting for inspection.</div></div>`;
-    const meta = [`<span><b>Job</b> ${esc(it.job)}</span>`, `<span><b>Due</b> ${fmtDue(it.due)}</span>`];
+    const meta = [`<span><b>Job Number:</b> ${esc(it.job)}</span>`, `<span><b>Due</b> ${fmtDue(it.due)}</span>`];
     if (it.qty) meta.push(`<span><b>Qty</b> ${esc(it.qty)}</span>`);
     meta.push(`<span><b>From</b> ${esc(who(it.created_by_email))}</span>`);
     return `<div class="next">
       <div class="eyebrow">Next up · ${it.dept === "wire" ? "Wire Fab" : "Machine Shop"} · ${it.type === "first_piece" ? "First Piece" : "Final"}${it.expedite ? " · Expedited" : ""}</div>
-      <div class="part">${esc(it.part)}</div><div class="meta">${meta.join("")}</div>
+      <div class="part-lbl">Part Number:</div><div class="part">${esc(it.part)}</div><div class="meta">${meta.join("")}</div>
       ${it.expedite && it.expedite_why ? `<div class="note"><b>Expedited:</b> ${esc(it.expedite_why)}</div>` : ""}
       ${it.notes ? `<div class="note">${esc(it.notes)}</div>` : ""}
       <div class="actions" style="justify-content:flex-start">${rowActions(it, true)}</div>${inlinePanel(it, "grid-column:auto")}</div>`;
@@ -426,9 +429,10 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
       case "start": return write(id, { status: "in_progress" }, "Started");
       case "done": return write(id, { status: "done" }, "Marked complete");
       case "requeue": return write(id, { status: "queued" }, "Back in the queue");
-      case "unexp": return write(id, { expedite: false }, "Expedite removed");
+      case "unexp": if (!canReorder) return; return write(id, { expedite: false }, "Expedite removed");
       case "up": case "down": return move(id, kind === "up" ? -1 : 1);
-      case "hold": case "exp": case "del": open = { id, kind }; return render();
+      case "exp": if (!canReorder) return; open = { id, kind }; return render();
+      case "hold": case "del": open = { id, kind }; return render();
       case "cancel": open = null; return render();
       case "holdYes": case "expYes": {
         const el = $("inlineReason"); const r = (el.value || "").trim();
