@@ -188,7 +188,7 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
   <header>
     <div>
       <h1>Inspection Queue</h1>
-      <div class="sub"><span id="today"></span> · <span title="Page version">v2026-10-22c</span></div>
+      <div class="sub"><span id="today"></span> · <span title="Page version">v2026-10-22d</span></div>
     </div>
     <div class="userbar" id="userbar" hidden><span id="whoami"></span><button type="button" class="btn ghost" id="signOut">Sign out</button></div>
     <div class="counts" aria-live="polite">
@@ -268,7 +268,7 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
             <li>Expedited items, by due date</li>
             <li>First pieces, in the order submitted</li>
             <li>Finals, by due date, then order submitted</li>
-            <li>Approved people can use ↑ ↓ to reorder items with the same due date</li>
+            <li>Approved people can use ↑ ↓ to reorder expedited items, first pieces, or finals with the same due date</li>
           </ol>
         </div>
       </form>
@@ -312,12 +312,19 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   const tier = (it) => it.expedite ? 0 : it.type === "first_piece" ? 1 : 2;
   function cmp(a, b) {
     const t = tier(a) - tier(b); if (t) return t;
-    if (tier(a) !== 1 && a.due !== b.due) return a.due < b.due ? -1 : 1;
+    if (tier(a) === 2 && a.due !== b.due) return a.due < b.due ? -1 : 1;
     return rank(a) - rank(b);
   }
   // Manual order inside a group (same tier, and same due date except for first pieces).
-  const rank = (it) => (typeof it.sort_rank === "number" ? it.sort_rank : ms(it.created_at));
-  const groupKey = (it) => tier(it) + "|" + (tier(it) === 1 ? "" : it.due);
+  // Expedited items form one group: by default ordered by due date (then time added),
+  // and once someone moves one, its saved position wins.
+  const dueMs = (d) => { const [y, m, dd] = d.split("-").map(Number); return Date.UTC(y, m - 1, dd); };
+  const rank = (it) => {
+    if (typeof it.sort_rank === "number") return it.sort_rank;
+    if (tier(it) === 0) return dueMs(it.due) + (ms(it.created_at) % 864e5) / 1000;
+    return ms(it.created_at);
+  };
+  const groupKey = (it) => (tier(it) === 2 ? "2|" + it.due : String(tier(it)));
   let pos = {};   // id -> {i, n} position within its group, rebuilt each render
   let queuedSorted = [];
 
