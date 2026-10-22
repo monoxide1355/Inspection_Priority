@@ -25,7 +25,11 @@
   --expedite-soft: #fbe0e0;
   --ok: #2e7d4f;
   --ok-soft: #dcefe3;
-  --rank: #1a5fc4;
+  --rank-bg: #1e8a4c;
+  --rank-fg: #ffffff;
+  --osp: #6b3fb5;
+  --osp-soft: #ece4f8;
+  --osp-on-tag: #5b2fa8;   /* OSP banner on the yellow NEXT UP card; same in both themes */
   --on-ok: #ffffff;
   --hold: #8a6a00;
   --hold-soft: #f5ecc8;
@@ -39,7 +43,7 @@
     --bg: #14181d; --surface: #1c2128; --sunk: #252b33; --ink: #e6e9ed; --muted: #9aa4b1; --line: #343c46;
     --tag: #f2b705; --tag-ink: #241a00;
     --wire: #e08a55; --wire-soft: #3a2619; --machine: #7fb0dd; --machine-soft: #1d2f40;
-    --expedite: #ff6b6b; --expedite-soft: #3d1c1e; --ok: #6cc596; --ok-soft: #173426; --on-ok: #0d2117; --rank: #7db4ff;
+    --expedite: #ff6b6b; --expedite-soft: #3d1c1e; --ok: #6cc596; --ok-soft: #173426; --on-ok: #0d2117; --rank-bg: #3fcf7e; --rank-fg: #06210f; --osp: #c4a5ff; --osp-soft: #2c2140;
     --hold: #e0c15a; --hold-soft: #362d10; --focus: #7fb0dd;
     color-scheme: dark;
   }
@@ -48,7 +52,7 @@
   --bg: #14181d; --surface: #1c2128; --sunk: #252b33; --ink: #e6e9ed; --muted: #9aa4b1; --line: #343c46;
   --tag: #f2b705; --tag-ink: #241a00;
   --wire: #e08a55; --wire-soft: #3a2619; --machine: #7fb0dd; --machine-soft: #1d2f40;
-  --expedite: #ff6b6b; --expedite-soft: #3d1c1e; --ok: #6cc596; --ok-soft: #173426; --on-ok: #0d2117; --rank: #7db4ff;
+  --expedite: #ff6b6b; --expedite-soft: #3d1c1e; --ok: #6cc596; --ok-soft: #173426; --on-ok: #0d2117; --rank-bg: #3fcf7e; --rank-fg: #06210f; --osp: #c4a5ff; --osp-soft: #2c2140;
   --hold: #e0c15a; --hold-soft: #362d10; --focus: #7fb0dd;
   color-scheme: dark;
 }
@@ -100,14 +104,16 @@ h2 .n { font-variant-numeric: tabular-nums; color: var(--ink); }
 
 /* queue rows */
 .list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); align-items: start; }
+.row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); align-items: start; }
 .row:first-child { border-top: 0; }
 .row.exp { box-shadow: inset 4px 0 0 var(--expedite); }
-.rank { font-family: var(--f-display); font-weight: 700; font-size: 1.6rem; line-height: 1.1; color: var(--rank); font-variant-numeric: tabular-nums; text-align: right; }
+.rank { font-family: var(--f-display); font-weight: 600; font-size: 1.4rem; line-height: 1.1; color: var(--muted); text-align: center; }
+.rank.num { background: var(--rank-bg); color: var(--rank-fg); font-weight: 700; font-size: 1.75rem; line-height: 44px; height: 44px; min-width: 44px; padding: 0 6px; border-radius: 8px; font-variant-numeric: tabular-nums; box-shadow: 0 1px 0 rgba(0,0,0,.2); }
 .body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .line1 { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
 .pn { font-family: var(--f-mono); font-weight: 500; font-size: 1rem; overflow-wrap: anywhere; }
 .job { font-family: var(--f-mono); font-size: .9rem; }
+.cust { font-weight: 600; font-size: .92rem; }
 .fl { font-family: var(--f-body); font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
 .next .part-lbl { font-size: .78rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; margin-bottom: -6px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -120,6 +126,8 @@ h2 .n { font-variant-numeric: tabular-nums; color: var(--ink); }
 .chip.over { background: var(--expedite-soft); color: var(--expedite); }
 .chip.today { background: var(--hold-soft); color: var(--hold); }
 .chip.hold { background: var(--hold-soft); color: var(--hold); }
+.chip.osp { background: var(--osp); color: var(--surface); }
+.next .osp-note { background: var(--osp-on-tag); color: #fff; font-weight: 700; letter-spacing: .04em; padding: 6px 10px; border-radius: 4px; font-size: .95rem; }
 .small { font-size: .84rem; color: var(--muted); }
 .why { font-size: .84rem; color: var(--expedite); }
 .actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
@@ -128,7 +136,7 @@ h2 .n { font-variant-numeric: tabular-nums; color: var(--ink); }
 .mover { display: inline-flex; gap: 2px; margin-right: 4px; }
 .btn.mv { padding: 6px 10px; font-size: .95rem; line-height: 1; }
 .next .mover .btn.mv { background: transparent; color: var(--tag-ink); border-color: var(--tag-ink); }
-@media (max-width: 600px) { .row { grid-template-columns: 28px minmax(0, 1fr); } .row .actions { grid-column: 2 / -1; justify-content: flex-start; } .next .part { font-size: 2rem; } }
+@media (max-width: 600px) { .row { grid-template-columns: 44px minmax(0, 1fr); } .rank.num { min-width: 40px; height: 40px; line-height: 40px; font-size: 1.55rem; } .row .actions { grid-column: 2 / -1; justify-content: flex-start; } .next .part { font-size: 2rem; } }
 
 /* buttons + form */
 .btn { font: 600 .85rem var(--f-body); padding: 6px 12px; border-radius: 5px; border: 1px solid var(--ink); background: var(--ink); color: var(--surface); cursor: pointer; white-space: nowrap; }
@@ -157,6 +165,7 @@ textarea { resize: vertical; min-height: 54px; }
 .seg input:focus-visible + label { outline: 3px solid var(--focus); outline-offset: -3px; }
 .check { display: flex; gap: 8px; align-items: center; font-weight: 600; }
 .check input { width: auto; accent-color: var(--expedite); }
+.osp-check input { accent-color: var(--osp); }
 .hint { font-size: .8rem; color: var(--muted); }
 .err { color: var(--expedite); font-size: .85rem; min-height: 1em; }
 .rule { font-size: .82rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
@@ -179,7 +188,7 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
   <header>
     <div>
       <h1>Inspection Queue</h1>
-      <div class="sub"><span id="today"></span> · <span title="Page version">v2026-10-22b</span></div>
+      <div class="sub"><span id="today"></span> · <span title="Page version">v2026-10-22c</span></div>
     </div>
     <div class="userbar" id="userbar" hidden><span id="whoami"></span><button type="button" class="btn ghost" id="signOut">Sign out</button></div>
     <div class="counts" aria-live="polite">
@@ -246,7 +255,9 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
           <div class="field"><label for="fDue">Due date</label><input id="fDue" type="date"></div>
           <div class="field"><label for="fQty">Qty</label><input id="fQty" type="number" min="1" inputmode="numeric"></div>
         </div>
-        <div class="field"><label for="fNotes">Notes</label><textarea id="fNotes" maxlength="300" placeholder="Where the parts are, customer, anything the inspector needs"></textarea></div>
+        <div class="field"><label for="fCust">Customer</label><input id="fCust" autocomplete="off" maxlength="80"></div>
+        <div class="field"><label for="fNotes">Notes</label><textarea id="fNotes" maxlength="300" placeholder="Where the parts are, anything the inspector needs"></textarea></div>
+        <label class="check osp-check"><input type="checkbox" id="fOsp"> Outside process (OSP) after inspection</label>
         <label class="check"><input type="checkbox" id="fExp"> Expedite (jumps ahead of first pieces)</label>
         <div class="field" id="expWhyField" hidden><label for="fExpWhy">Reason for expediting</label><input id="fExpWhy" maxlength="140" placeholder="e.g. Truck leaves at 2:00, customer line down"></div>
         <div class="err" id="formErr" role="alert"></div>
@@ -316,6 +327,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     let h = `<span class="chip ${it.dept}">${it.dept === "wire" ? "Wire Fab" : "Machine"}</span>`;
     h += it.type === "first_piece" ? `<span class="chip fp">First Piece</span>` : `<span class="chip final">Final</span>`;
     if (it.expedite) h += `<span class="chip exp">Expedite</span>`;
+    if (it.osp) h += `<span class="chip osp" title="Goes to outside process after inspection">OSP after inspection</span>`;
     if (it.status !== "done") { if (it.due < t) h += `<span class="chip over">Past due</span>`; else if (it.due === t) h += `<span class="chip today">Due today</span>`; }
     return h;
   }
@@ -352,19 +364,22 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     if (it.notes) extra.push(`<div class="small">${esc(it.notes)}</div>`);
     let line = `Due ${fmtDue(it.due)}`; if (it.qty) line += ` · Qty ${esc(it.qty)}`; line += ` · Added by ${esc(who(it.created_by_email))} ${fmtTime(it.created_at)}`;
     return `<li class="row${it.expedite && it.status !== "done" ? " exp" : ""}">
-      <div class="rank">${rank ?? ""}</div>
-      <div class="body"><div class="line1"><span><span class="fl">Part Number:</span><span class="pn">${esc(it.part)}</span></span><span><span class="fl">Job Number:</span><span class="job">${esc(it.job)}</span></span></div>
+      <div class="rank${typeof rank === "number" ? " num" : ""}"${typeof rank === "number" ? ` aria-label="Queue position ${rank}"` : ""}>${rank ?? ""}</div>
+      <div class="body"><div class="line1"><span><span class="fl">Part Number:</span><span class="pn">${esc(it.part)}</span></span><span><span class="fl">Job Number:</span><span class="job">${esc(it.job)}</span></span>${it.customer ? `<span><span class="fl">Customer:</span><span class="cust">${esc(it.customer)}</span></span>` : ""}</div>
         <div class="chips">${chips(it)}</div><div class="small">${line}</div>${extra.join("")}</div>
       <div class="actions">${rowActions(it)}</div>${inlinePanel(it)}</li>`;
   }
   function nextCard(it) {
     if (!it) return `<div class="next empty"><div class="eyebrow">Next up</div><div>Nothing waiting for inspection.</div></div>`;
-    const meta = [`<span><b>Job Number:</b> ${esc(it.job)}</span>`, `<span><b>Due</b> ${fmtDue(it.due)}</span>`];
+    const meta = [`<span><b>Job Number:</b> ${esc(it.job)}</span>`];
+    if (it.customer) meta.push(`<span><b>Customer:</b> ${esc(it.customer)}</span>`);
+    meta.push(`<span><b>Due</b> ${fmtDue(it.due)}</span>`);
     if (it.qty) meta.push(`<span><b>Qty</b> ${esc(it.qty)}</span>`);
     meta.push(`<span><b>From</b> ${esc(who(it.created_by_email))}</span>`);
     return `<div class="next">
       <div class="eyebrow">Next up · ${it.dept === "wire" ? "Wire Fab" : "Machine Shop"} · ${it.type === "first_piece" ? "First Piece" : "Final"}${it.expedite ? " · Expedited" : ""}</div>
       <div class="part-lbl">Part Number:</div><div class="part">${esc(it.part)}</div><div class="meta">${meta.join("")}</div>
+      ${it.osp ? `<div class="osp-note">OSP: send to outside process after inspection</div>` : ""}
       ${it.expedite && it.expedite_why ? `<div class="note"><b>Expedited:</b> ${esc(it.expedite_why)}</div>` : ""}
       ${it.notes ? `<div class="note">${esc(it.notes)}</div>` : ""}
       <div class="actions" style="justify-content:flex-start">${rowActions(it, true)}</div>${inlinePanel(it, "grid-column:auto")}</div>`;
@@ -482,7 +497,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     if (!due) { err.textContent = "Pick a due date."; return fDue.focus(); }
     if (expedite && !expediteWhy) { err.textContent = "Say why this needs expediting."; return $("fExpWhy").focus(); }
     $("addBtn").disabled = true;
-    const { error } = await sb.from(T).insert({ dept, type, part, job, due, qty: qty > 0 ? qty : null, notes: $("fNotes").value.trim(), expedite, expedite_why: expedite ? expediteWhy : "" });
+    const { error } = await sb.from(T).insert({ dept, type, part, job, customer: $("fCust").value.trim(), osp: $("fOsp").checked, due, qty: qty > 0 ? qty : null, notes: $("fNotes").value.trim(), expedite, expedite_why: expedite ? expediteWhy : "" });
     $("addBtn").disabled = false;
     if (error) {
       err.textContent = /row-level security/i.test(error.message)
@@ -490,8 +505,8 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         : "Couldn't save the request: " + error.message;
       return;
     }
-    ["fPart", "fJob", "fQty", "fNotes", "fExpWhy"].forEach((id) => ($(id).value = ""));
-    $("fExp").checked = false; syncForm(); toast("Added to queue"); load();
+    ["fPart", "fJob", "fCust", "fQty", "fNotes", "fExpWhy"].forEach((id) => ($(id).value = ""));
+    $("fExp").checked = false; $("fOsp").checked = false; syncForm(); toast("Added to queue"); load();
   });
 
   /* ---------- auth + boot ---------- */
