@@ -122,6 +122,7 @@ h2 .n { font-variant-numeric: tabular-nums; color: var(--ink); }
 .pn { font-family: var(--f-mono); font-weight: 500; font-size: 1rem; overflow-wrap: anywhere; }
 .job { font-family: var(--f-mono); font-size: .9rem; }
 .cust { font-weight: 600; font-size: .92rem; }
+.took { font-size: .9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .fl { font-family: var(--f-body); font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
 .next .part-lbl { font-size: .78rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; margin-bottom: -6px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -214,7 +215,7 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
   <header>
     <div>
       <h1>Inspection Queue</h1>
-      <div class="sub"><span id="today"></span> · <span title="Page version">v2026-11-16a</span></div>
+      <div class="sub"><span id="today"></span> · <span title="Page version">v2026-11-16b</span></div>
     </div>
     <div class="userbar" id="userbar" hidden><span id="whoami"></span><button type="button" class="btn ghost" id="signOut">Sign out</button></div>
     <div class="counts" aria-live="polite">
@@ -327,6 +328,15 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   const fmtDue = (s) => { if (!s) return "—"; const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }); };
   const ms = (ts) => (ts ? Date.parse(ts) : 0);
   const fmtTime = (ts) => ts ? new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+  // "45 min", "1 hr 12 min", "under 1 min"
+  function fmtDuration(a, b) {
+    if (!a || !b) return "";
+    const mins = Math.round((Date.parse(b) - Date.parse(a)) / 60000);
+    if (!(mins >= 0)) return "";
+    if (mins < 1) return "under 1 min";
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return h ? `${h} hr${m ? " " + m + " min" : ""}` : `${m} min`;
+  }
   const who = (email) => !email ? "Someone" : email === myEmail ? "you" : email.split("@")[0];
 
   $("today").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
@@ -399,7 +409,12 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     if (it.expedite && it.expedite_why) extra.push(`<div class="why">Expedited by ${esc(who(it.expedited_by))}: ${esc(it.expedite_why)}</div>`);
     if (it.status === "hold") extra.push(`<div class="small"><span class="chip hold">On hold</span> ${esc(it.hold_why)} · ${esc(who(it.held_by))}</div>`);
     if (it.status === "in_progress") extra.push(`<div class="small">Started by ${esc(who(it.started_by))} ${fmtTime(it.started_at)}</div>`);
-    if (it.status === "done") extra.push(`<div class="small">Completed by ${esc(who(it.completed_by))} ${fmtTime(it.completed_at)}</div>`);
+    if (it.status === "done") {
+      if (it.started_at) extra.push(`<div class="small">Started by ${esc(who(it.started_by))} ${fmtTime(it.started_at)}</div>`);
+      extra.push(`<div class="small">Completed by ${esc(who(it.completed_by))} ${fmtTime(it.completed_at)}</div>`);
+      const took = fmtDuration(it.started_at, it.completed_at);
+      if (took) extra.push(`<div class="took"><span class="fl">Inspection time:</span> ${took}</div>`);
+    }
     if (it.notes) extra.push(`<div class="small">${esc(it.notes)}</div>`);
     let line = `Due ${fmtDue(it.due)}`; if (it.qty) line += ` · Qty ${esc(it.qty)}`; line += ` · Added by ${esc(who(it.created_by_email))} ${fmtTime(it.created_at)}`;
     return `<li class="row${it.expedite && it.status !== "done" ? " exp" : ""}${editing && editing.id === it.id ? " editing-row" : ""}">
