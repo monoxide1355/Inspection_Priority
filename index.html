@@ -215,7 +215,7 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
   <header>
     <div>
       <h1>Inspection Queue</h1>
-      <div class="sub"><span id="today"></span> · <span title="Page version">v2026-11-16b</span></div>
+      <div class="sub"><span id="today"></span> · <span title="Page version">v2026-11-17a</span></div>
     </div>
     <div class="userbar" id="userbar" hidden><span id="whoami"></span><button type="button" class="btn ghost" id="signOut">Sign out</button></div>
     <div class="counts" aria-live="polite">
@@ -297,7 +297,7 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
             <li>Expedited items, by due date</li>
             <li>First pieces, in the order submitted</li>
             <li>Finals and raw material, by due date, then order submitted</li>
-            <li>Approved people can use ↑ ↓ to reorder expedited items, first pieces, or finals and raw material with the same due date</li>
+            <li>Approved people can use ↑ ↓ to reorder within expedited items, first pieces, or finals and raw material (any due date)</li>
           </ol>
         </div>
       </form>
@@ -350,8 +350,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   const tier = (it) => it.expedite ? 0 : it.type === "first_piece" ? 1 : 2;
   function cmp(a, b) {
     const t = tier(a) - tier(b); if (t) return t;
-    if (tier(a) === 2 && a.due !== b.due) return a.due < b.due ? -1 : 1;
-    return rank(a) - rank(b);
+    return (rank(a) - rank(b)) || (ms(a.created_at) - ms(b.created_at));
   }
   // Manual order inside a group (same tier, and same due date except for first pieces).
   // Expedited items form one group: by default ordered by due date (then time added),
@@ -359,10 +358,13 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   const dueMs = (d) => { const [y, m, dd] = d.split("-").map(Number); return Date.UTC(y, m - 1, dd); };
   const rank = (it) => {
     if (typeof it.sort_rank === "number") return it.sort_rank;
-    if (tier(it) === 0) return dueMs(it.due) + (ms(it.created_at) % 864e5) / 1000;
-    return ms(it.created_at);
+    // Expedited and final/raw-material items default to due-date order (then order added);
+    // first pieces default to order added. A saved sort_rank (from ↑ ↓) overrides the default.
+    if (tier(it) === 1) return ms(it.created_at);
+    return dueMs(it.due) + (ms(it.created_at) - 1.7e12) / 1e6;
   };
-  const groupKey = (it) => (tier(it) === 2 ? "2|" + it.due : String(tier(it)));
+  // Three groups, each reorderable end to end: expedited, first pieces, finals/raw material.
+  const groupKey = (it) => String(tier(it));
   let pos = {};   // id -> {i, n} position within its group, rebuilt each render
   let queuedSorted = [];
 
@@ -493,12 +495,15 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     const g = queuedSorted.filter((x) => groupKey(x) === groupKey(it));
     const i = g.indexOf(it), j = i + dir;
     if (j < 0 || j >= g.length) return;
-    const nb = g[j], beyond = g[j + dir];
-    const STEP = 60000;
-    const r = beyond ? (rank(nb) + rank(beyond)) / 2 : rank(nb) + dir * STEP;
-    it.sort_rank = r; render();                        // move on screen right away
-    const { error } = await sb.from(T).update({ sort_rank: r }).eq("id", id);
-    if (error) toast("Couldn't move: " + error.message);
+    // Swap places with the neighbour. Ranks stay on the due-date scale, so items
+    // added later still drop into due-date order around the ones that were moved.
+    const nb = g[j];
+    const rIt = rank(it), rNb = rank(nb);
+    const newIt = rNb === rIt ? rNb + dir : rNb;
+    it.sort_rank = newIt; nb.sort_rank = rIt; render();   // move on screen right away
+    const a = await sb.from(T).update({ sort_rank: newIt }).eq("id", it.id);
+    const b = a.error ? a : await sb.from(T).update({ sort_rank: rIt }).eq("id", nb.id);
+    if (a.error || b.error) toast("Couldn't move: " + (a.error || b.error).message);
     scheduleLoad();
   }
   async function act(kind, id) {
