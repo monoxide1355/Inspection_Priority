@@ -127,6 +127,8 @@ h2 .n { font-variant-numeric: tabular-nums; color: var(--ink); }
 .pn { font-family: var(--f-mono); font-weight: 500; font-size: 1rem; overflow-wrap: anywhere; }
 .job { font-family: var(--f-mono); font-size: .9rem; }
 .cust { font-weight: 600; font-size: .92rem; }
+.pname { font-weight: 600; font-size: .92rem; }
+.next .pname-big { font-size: 1.15rem; font-weight: 600; margin-top: -2px; overflow-wrap: anywhere; }
 .took { font-size: .9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .fl { font-family: var(--f-body); font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
 .next .part-lbl { font-size: .78rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; margin-bottom: -6px; }
@@ -220,7 +222,7 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
   <header>
     <div>
       <h1>Inspection Queue</h1>
-      <div class="sub"><span id="today"></span> · <span title="Page version">v2026-11-17b</span></div>
+      <div class="sub"><span id="today"></span> · <span title="Page version">v2026-11-19a</span></div>
     </div>
     <div class="userbar" id="userbar" hidden><span id="whoami"></span><button type="button" class="btn ghost" id="signOut">Sign out</button></div>
     <div class="counts" aria-live="polite">
@@ -285,6 +287,7 @@ details .list { border: 0; border-top: 1px solid var(--line); border-radius: 0; 
           <div class="field"><label for="fPart">Part number</label><input id="fPart" autocomplete="off" maxlength="60"></div>
           <div class="field"><label for="fJob">Job / WO</label><input id="fJob" autocomplete="off" maxlength="40"></div>
         </div>
+        <div class="field"><label for="fPName">Part name</label><input id="fPName" autocomplete="off" maxlength="80" placeholder="e.g. Mounting Bracket"></div>
         <div class="two">
           <div class="field"><label for="fDue">Due date</label><input id="fDue" type="date"></div>
           <div class="field"><label for="fQty">Qty</label><input id="fQty" type="number" min="1" inputmode="numeric"></div>
@@ -426,7 +429,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     let line = `Due ${fmtDue(it.due)}`; if (it.qty) line += ` · Qty ${esc(it.qty)}`; line += ` · Added by ${esc(who(it.created_by_email))} ${fmtTime(it.created_at)}`;
     return `<li class="row${it.expedite && it.status !== "done" ? " exp" : ""}${editing && editing.id === it.id ? " editing-row" : ""}">
       <div class="rank${typeof rank === "number" ? " num" : ""}"${typeof rank === "number" ? ` aria-label="Queue position ${rank}"` : ""}>${rank ?? ""}</div>
-      <div class="body"><div class="line1"><span><span class="fl">Part Number:</span><span class="pn">${esc(it.part)}</span></span><span><span class="fl">Job Number:</span><span class="job">${esc(it.job)}</span></span>${it.customer ? `<span><span class="fl">Customer:</span><span class="cust">${esc(it.customer)}</span></span>` : ""}</div>
+      <div class="body"><div class="line1"><span><span class="fl">Part Number:</span><span class="pn">${esc(it.part)}</span></span>${it.part_name ? `<span><span class="fl">Part Name:</span><span class="pname">${esc(it.part_name)}</span></span>` : ""}<span><span class="fl">Job Number:</span><span class="job">${esc(it.job)}</span></span>${it.customer ? `<span><span class="fl">Customer:</span><span class="cust">${esc(it.customer)}</span></span>` : ""}</div>
         <div class="chips">${chips(it)}</div><div class="small">${line}</div>${extra.join("")}</div>
       <div class="actions">${rowActions(it)}</div>${inlinePanel(it)}</li>`;
   }
@@ -440,7 +443,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     return `<div class="next">
       <div class="next-head">
         <div class="rank num next-rank" aria-label="Queue position 1">1</div>
-        <div class="next-title"><div class="eyebrow">Next up</div><div class="part-lbl">Part Number:</div><div class="part">${esc(it.part)}</div></div>
+        <div class="next-title"><div class="eyebrow">Next up</div><div class="part-lbl">Part Number:</div><div class="part">${esc(it.part)}</div>${it.part_name ? `<div class="pname-big">${esc(it.part_name)}</div>` : ""}</div>
       </div>
       <div class="tags">${chips(it, true)}</div>
       <div class="meta">${meta.join("")}</div>
@@ -571,7 +574,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     const it = items.find((x) => x.id === id); if (!it) return;
     editing = it; open = null;
     setRadio("dept", it.dept); setRadio("type", it.type);
-    $("fPart").value = it.part || ""; $("fJob").value = it.job || "";
+    $("fPart").value = it.part || ""; $("fJob").value = it.job || ""; $("fPName").value = it.part_name || "";
     fDue.value = it.due || todayStr(); $("fQty").value = it.qty || "";
     $("fCust").value = it.customer || ""; $("fNotes").value = it.notes || "";
     $("fOsp").checked = !!it.osp; $("fExp").checked = false; $("formErr").textContent = "";
@@ -585,7 +588,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
   function endEdit() {
     if (!editing) return;
     editing = null;
-    ["fPart", "fJob", "fCust", "fQty", "fNotes", "fExpWhy"].forEach((id) => ($(id).value = ""));
+    ["fPart", "fPName", "fJob", "fCust", "fQty", "fNotes", "fExpWhy"].forEach((id) => ($(id).value = ""));
     $("fOsp").checked = false; $("fExp").checked = false; fDue.value = todayStr();
     setRadio("dept", "machine"); setRadio("type", "final");
     $("formTitle").textContent = "Add inspection request";
@@ -610,7 +613,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     if (!job) { err.textContent = "Enter the job or work order number."; return $("fJob").focus(); }
     if (!due) { err.textContent = "Pick a due date."; return fDue.focus(); }
     if (editing) {
-      const patch = { dept, type, part, job, due, qty: qty > 0 ? qty : null, customer: $("fCust").value.trim(), notes: $("fNotes").value.trim(), osp: $("fOsp").checked };
+      const patch = { dept, type, part, part_name: $("fPName").value.trim(), job, due, qty: qty > 0 ? qty : null, customer: $("fCust").value.trim(), notes: $("fNotes").value.trim(), osp: $("fOsp").checked };
       $("addBtn").disabled = true;
       const { error } = await sb.from(T).update(patch).eq("id", editing.id);
       $("addBtn").disabled = false;
@@ -622,7 +625,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
     }
     if (expedite && !expediteWhy) { err.textContent = "Say why this needs expediting."; return $("fExpWhy").focus(); }
     $("addBtn").disabled = true;
-    const { error } = await sb.from(T).insert({ dept, type, part, job, customer: $("fCust").value.trim(), osp: $("fOsp").checked, due, qty: qty > 0 ? qty : null, notes: $("fNotes").value.trim(), expedite, expedite_why: expedite ? expediteWhy : "" });
+    const { error } = await sb.from(T).insert({ dept, type, part, part_name: $("fPName").value.trim(), job, customer: $("fCust").value.trim(), osp: $("fOsp").checked, due, qty: qty > 0 ? qty : null, notes: $("fNotes").value.trim(), expedite, expedite_why: expedite ? expediteWhy : "" });
     $("addBtn").disabled = false;
     if (error) {
       err.textContent = /row-level security/i.test(error.message)
@@ -630,7 +633,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         : "Couldn't save the request: " + error.message;
       return;
     }
-    ["fPart", "fJob", "fCust", "fQty", "fNotes", "fExpWhy"].forEach((id) => ($(id).value = ""));
+    ["fPart", "fPName", "fJob", "fCust", "fQty", "fNotes", "fExpWhy"].forEach((id) => ($(id).value = ""));
     $("fExp").checked = false; $("fOsp").checked = false; syncForm(); toast("Added to queue"); load();
   });
 
